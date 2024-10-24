@@ -1,5 +1,42 @@
 #include "app.h"
 
+typedef enum
+{
+  CONSOLE_OK  = 0,
+  CONSOLE_ERROR = -1
+} Console_Status;
+
+UART_HandleTypeDef Console_UARTHandle;
+
+Console_Status webserver_console_config(void)
+{
+  /* Set parameter to be configured */
+  Console_UARTHandle.Instance                    = USART1;
+  Console_UARTHandle.Init.BaudRate               = 115200;
+  Console_UARTHandle.Init.WordLength             = UART_WORDLENGTH_8B;
+  Console_UARTHandle.Init.StopBits               = UART_STOPBITS_1;
+  Console_UARTHandle.Init.Parity                 = UART_PARITY_NONE;
+  Console_UARTHandle.Init.Mode                   = UART_MODE_TX_RX;
+  Console_UARTHandle.Init.HwFlowCtl              = UART_HWCONTROL_NONE;
+  Console_UARTHandle.Init.OverSampling           = UART_OVERSAMPLING_16;
+  Console_UARTHandle.Init.OneBitSampling         = UART_ONE_BIT_SAMPLE_DISABLE;
+  Console_UARTHandle.Init.ClockPrescaler         = UART_PRESCALER_DIV1;
+  Console_UARTHandle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+
+  /* Initialize the UART mode */
+  if (HAL_UART_Init(&Console_UARTHandle) != HAL_OK)
+  {
+    return CONSOLE_ERROR;
+  }
+
+  /* Disable the UART FIFO mode */
+  if (HAL_UARTEx_DisableFifoMode(&Console_UARTHandle) != HAL_OK)
+  {
+    return CONSOLE_ERROR;
+  }
+
+  return CONSOLE_OK;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////     APP SETTINGS (SHOULD BE UPDATE)    /////////////////////////////////////////////////////////////////////////////
@@ -16,6 +53,14 @@ int32_t socket_timeout = 0xFFFFFFFF; // Setting time to connect to the server			
 int8_t app_main( void) {
 
     /* Initialize bsp resources */
+
+	// Console_Status console_value = webserver_console_config();
+
+	uint8_t Test[] = "Hello World !!!\r\n"; //Data to send
+	HAL_UART_Transmit(&Console_UARTHandle,Test,sizeof(Test),10);// Sending in normal mode
+	HAL_Delay(1000);
+
+	printf("test");
 
     MX_WIFI_STATUS_T a;  // declare a variable to stock the state of the module
 
@@ -121,22 +166,78 @@ int8_t app_main( void) {
 				return GET_REQUEST_RECEIVING_FAILED;
 		}
 
-	const char* web_page = "HTTP/1.1 200 OK\r\nServer: STM32U585-DK\r\nAccess-Control-Allow-Origin: * \r\nAccess-Control-Allow-Methods: GET\r\nAccess-Control-Allow-Headers: cache-control, last-event-id, X-Requested-With\r\nContent-Type: text/html; charset=utf-8\r\nAccept-Ranges: bytes\r\nContent-Length: 89\r\nConnection: close\r\n\r\n\n<!DOCTYPE html><html><head><link rel='icon' href='data:,'></head><body>TEST</body></html>";
+	const char* web_page =
+		"HTTP/1.1 200 OK\r\n"
+		"Server: STM32U585-DK\r\n"
+		"Access-Control-Allow-Origin: *\r\n"
+		"Access-Control-Allow-Methods: GET\r\n"
+		"Access-Control-Allow-Headers: cache-control, last-event-id, X-Requested-With\r\n"
+		"Content-Type: text/html; charset=utf-8\r\n"
+		"Accept-Ranges: bytes\r\n"
+		"Content-Length: 1338\r\n"
+		"Connection: close\r\n"
+		"\r\n"
+		"\n"
+		"<!DOCTYPE html>\n"
+		"<html lang=\"fr\">\n"
+		"<head>\n"
+		"    <meta charset=\"UTF-8\">\n"
+		"    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+		"    <link rel='icon' href='data:,'>\n"
+		"    <title>Formulaire POST</title>\n"
+		"    <style>\n"
+		"        label { display: block; margin-top: 10px; }\n"
+		"    </style>\n"
+		"</head>\n"
+		"<body>\n"
+		"    <h2>Formulaire de configuration</h2>\n"
+		"    <form id=\"configForm\" method=\"POST\">\n"
+		"        <label for=\"apn\">APN SIM :</label>\n"
+		"        <select id=\"apn\" name=\"apn\" required>\n"
+		"            <option value=\"free\">Free</option>\n"
+		"            <option value=\"orange\">Orange</option>\n"
+		"            <option value=\"bouygues\">Bouygues</option>\n"
+		"        </select>\n"
+		"        <button type=\"submit\">Envoyer</button>\n"
+		"    </form>\n"
+		"    <script>\n"
+		"        document.getElementById('configForm').addEventListener('submit', function(event) {\n"
+		"            event.preventDefault();\n"
+		"            const form = event.target;\n"
+		"            const formData = new FormData(form);\n"
+		"            const ip = window.location.hostname;\n"
+		"            fetch(`http://${ip}/submit`, {\n"
+		"                method: 'POST',\n"
+		"                body: formData\n"
+		"            })\n"
+		"            .then(response => response.text())\n"
+		"            .then(data => alert(\"Formulaire envoyé avec succès !\"))\n"
+		"            .catch(error => alert(\"Erreur lors de l'envoi du formulaire\"));\n"
+		"        });\n"
+		"    </script>\n"
+		"</body>\n"
+		"</html>";
 
-	int32_t nb_bytes = MX_WIFI_Socket_send(wifi_obj_get(), client_sock, (const uint8_t *)web_page, strlen(web_page), 0); // function to send the web page to the client
+	int32_t nb_bytes_sent = MX_WIFI_Socket_send(wifi_obj_get(), client_sock, (const uint8_t *)web_page, strlen(web_page), 0); // function to send the web page to the client
 
-		if (nb_bytes < 0){
+		if (nb_bytes_sent < 0){
 				return GET_REQUEST_SENDING_FAILED;
 		}
 
-	/*static unsigned char recv_buffer1[300]; // create a buffer to stock the response
+	client_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
+
+		if (client_sock < 0 ){
+				return SOCKET_ACCEPTING_FAILED;
+		}
+
+	static unsigned char recv_buffer1[1000]; // create a buffer to stock the response
 	memset((void*)recv_buffer1, 0, sizeof(recv_buffer)); // Clear the buffer
 
-	int32_t nb1 = MX_WIFI_Socket_recv(wifi_obj_get(), client_sock, (uint8_t *)recv_buffer1, 300, 0); // function to receive the client's request
+	int32_t nb1 = MX_WIFI_Socket_recv(wifi_obj_get(), client_sock, (uint8_t *)recv_buffer1, 1000, 0); // function to receive the client's request
 
 		if (nb1 < 0){
 				return GET_REQUEST_RECEIVING_FAILED;
-		}*/
+		}
 
 	a = MX_WIFI_Socket_close(wifi_obj_get(), sock_fd); // Closing socket function
 
