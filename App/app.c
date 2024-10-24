@@ -120,7 +120,7 @@ int8_t app_main( void) {
 			return SOCKET_BINDING_FAILED;
 		}
 
-	a =	MX_WIFI_Socket_listen(wifi_obj_get(),sock_fd, 5); // backlog here 5 is the number of connection accepted
+	a =	MX_WIFI_Socket_listen(wifi_obj_get(),sock_fd, 1); // backlog here 5 is the number of connection accepted
 
 		if (a != MX_WIFI_STATUS_OK){
 				return SOCKET_LISTENING_FAILED;
@@ -149,20 +149,20 @@ int8_t app_main( void) {
 	HAL_GPIO_WritePin(GPIOH, GPIO_PIN_7, GPIO_PIN_RESET); // turn on the green LED to indicate that you can connect to IP address
 
 	// accept function will block the device until a connection request, in the function, addr is used to stock the IP address of the remote device
-	int32_t client_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
+	int32_t get_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
 
-		if (client_sock < 0 ){
+		if (get_request_sock < 0 ){
 				return SOCKET_ACCEPTING_FAILED;
 		}
 
 	HAL_GPIO_WritePin(GPIOH, GPIO_PIN_7, GPIO_PIN_SET); // turn on the green LED to indicate that you can connect to IP address
 
-	static unsigned char recv_buffer[300]; // create a buffer to stock the response
-	memset((void*)recv_buffer, 0, sizeof(recv_buffer)); // Clear the buffer
+	static unsigned char get_request_recv_buffer[300]; // create a buffer to stock the response
+	memset((void*)get_request_recv_buffer, 0, sizeof(get_request_recv_buffer)); // Clear the buffer
 
-	int32_t nb = MX_WIFI_Socket_recv(wifi_obj_get(), client_sock, (uint8_t *)recv_buffer, 300, 0); // function to receive the client's request
+	int32_t get_request_recv_nb_bytes = MX_WIFI_Socket_recv(wifi_obj_get(), get_request_sock, (uint8_t *)get_request_recv_buffer, 300, 0); // function to receive the client's request
 
-		if (nb < 0){
+		if (get_request_recv_nb_bytes < 0){
 				return GET_REQUEST_RECEIVING_FAILED;
 		}
 
@@ -218,24 +218,25 @@ int8_t app_main( void) {
 		"</body>\n"
 		"</html>";
 
-	int32_t nb_bytes_sent = MX_WIFI_Socket_send(wifi_obj_get(), client_sock, (const uint8_t *)web_page, strlen(web_page), 0); // function to send the web page to the client
+	int32_t get_request_send_nb_bytes = MX_WIFI_Socket_send(wifi_obj_get(), get_request_sock, (const uint8_t *)web_page, strlen(web_page), 0); // function to send the web page to the client
 
-		if (nb_bytes_sent < 0){
+		if (get_request_send_nb_bytes < 0){
 				return GET_REQUEST_SENDING_FAILED;
 		}
 
-	client_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
 
-		if (client_sock < 0 ){
+	int32_t post_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
+
+		if (post_request_sock < 0 ){
 				return SOCKET_ACCEPTING_FAILED;
 		}
 
-	static unsigned char recv_buffer1[1000]; // create a buffer to stock the response
-	memset((void*)recv_buffer1, 0, sizeof(recv_buffer)); // Clear the buffer
+	static unsigned char post_request_recv_buffer[1000]; // create a buffer to stock the response
+	memset((void*)post_request_recv_buffer, 0, sizeof(post_request_recv_buffer)); // Clear the buffer
 
-	int32_t nb1 = MX_WIFI_Socket_recv(wifi_obj_get(), client_sock, (uint8_t *)recv_buffer1, 1000, 0); // function to receive the client's request
+	int32_t post_request_recv_nb_bytes = MX_WIFI_Socket_recv(wifi_obj_get(), post_request_sock, (uint8_t *)post_request_recv_buffer, 1000, 0); // function to receive the client's request
 
-		if (nb1 < 0){
+		if (post_request_recv_nb_bytes < 0){
 				return GET_REQUEST_RECEIVING_FAILED;
 		}
 
