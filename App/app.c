@@ -1,4 +1,5 @@
 #include "app.h"
+#include "main.h"
 
 typedef enum
 {
@@ -37,6 +38,9 @@ Console_Status webserver_console_config(void)
 
   return CONSOLE_OK;
 }
+
+unsigned char print_on_uart[1000]; // create a buffer to stock the response
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////     APP SETTINGS (SHOULD BE UPDATE)    /////////////////////////////////////////////////////////////////////////////
@@ -234,7 +238,11 @@ int8_t app_main( void) {
 	static unsigned char post_request_recv_buffer[1000]; // create a buffer to stock the response
 	memset((void*)post_request_recv_buffer, 0, sizeof(post_request_recv_buffer)); // Clear the buffer
 
+	memset((void*)print_on_uart, 0, sizeof(print_on_uart)); // Clear the buffer
+
 	int32_t post_request_recv_nb_bytes = MX_WIFI_Socket_recv(wifi_obj_get(), post_request_sock, (uint8_t *)post_request_recv_buffer, 1000, 0); // function to receive the client's request
+
+    memcpy(print_on_uart, post_request_recv_buffer, sizeof(post_request_recv_buffer)); // Copier le contenu
 
 		if (post_request_recv_nb_bytes < 0){
 				return GET_REQUEST_RECEIVING_FAILED;

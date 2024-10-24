@@ -39,4 +39,6 @@ typedef enum { // Structure to indicate the app status
 
 int8_t app_main( void);
 
+extern unsigned char print_on_uart[1000];
+
 #endif

@@ -140,6 +140,14 @@ int main(void)
   if(init_status==0){
 	  int8_t app_status=app_main(); // launching the application
 
+
+	  uint8_t new_line[] = "\r\n\r\n"; //Data to send
+	  HAL_UART_Transmit(&huart1,new_line,sizeof(new_line),10);// Sending in normal mode
+
+
+	  extern unsigned char print_on_uart[1000]; // déclaration externe
+	  HAL_UART_Transmit(&huart1,print_on_uart,sizeof(print_on_uart),10000);// Sending in normal mode
+
 	  if(app_status==0){
 		  HAL_GPIO_TogglePin(GPIOH, GPIO_PIN_7); // if success --> turn on the green LED
 	  }
