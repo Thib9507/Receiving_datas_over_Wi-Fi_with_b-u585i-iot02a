@@ -170,14 +170,15 @@ int8_t app_main( void) {
 				return GET_REQUEST_RECEIVING_FAILED;
 		}
 
-	const char* web_page = "HTTP/1.1 200 OK\r\n"
+		// The following part is the code of the web page sent to the client. This web page is sent by few request because the module can send a limited number of bytes (2482)
+	const char* web_page_part1 = "HTTP/1.1 200 OK\r\n"
 		"Server: STM32U585-DK\r\n"
 		"Access-Control-Allow-Origin: *\r\n"
 		"Access-Control-Allow-Methods: GET\r\n"
 		"Access-Control-Allow-Headers: cache-control, last-event-id, X-Requested-With\r\n"
 		"Content-Type: text/html; charset=utf-8\r\n"
 		"Accept-Ranges: bytes\r\n"
-		"Content-Length: 1590\r\n" // content-length must be correct otherwise the request won't work correctly
+		"Content-Length: 2479\r\n" // content-length (length of the full web page code) must be correct otherwise the request won't work correctly
 		"Connection: close\r\n"
 		"\r\n"
 		"<!DOCTYPE html>\n"
@@ -194,15 +195,44 @@ int8_t app_main( void) {
 		"<body>\n"
 		"    <h2>Formulaire de configuration</h2>\n"
 		"    <form id=\"configForm\" method=\"POST\">\n"
-		"        <label for=\"apn\">APN SIM :</label>\n"
+		"		<label for=\"apn\">APN SIM :</label>\n"
 		"        <select id=\"apn\" name=\"apn\" required>\n"
 		"            <option value=\"free\">Free</option>\n"
 		"            <option value=\"orange\">Orange</option>\n"
 		"            <option value=\"bouygues\">Bouygues</option>\n"
 		"        </select>\n"
+		"		<br>\n"
+		"        <label for=\"language\">Defibrillator language :</label>\n"
+		"        <select id=\"language\" name=\"language\" required>\n"
+		"            <option value=\"DCA_ENG_ENG_ENG\">English</option>\n"
+		"            <option value=\"DCA_FRE_FRE_FRE\">Français</option>\n"
+		"            <option value=\"DCA_GER_GER_GER\">Deutsche</option>\n"
+		"            <option value=\"DCA_SPA_SPA_SPA\">Spanish</option>\n"
+		"        </select>\n"
+		"		<br>\n"
+		"        <label for=\"language\">DCA energy (in joule):</label>\n"
+		"        <select id=\"dca_nrj\" name=\"dca_nrj\" required>\n"
+		"            <option value=\"15\">15</option>\n"
+		"            <option value=\"30\">30</option>\n"
+		"            <option value=\"50\">50</option>\n"
+		"            <option value=\"70\">70</option>\n"
+		"            <option value=\"90\">90</option>\n"
+		"            <option value=\"120\">120</option>\n"
+		"            <option value=\"150\">150</option>\n"
+		"            <option value=\"200\">200</option>\n"
+		"        </select>\n"
+		"		<br>\n"
+		"		<br>\n"
 		"        <button type=\"submit\">Envoyer</button>\n"
-		"    </form>\n"
-		"    <script>\n"
+		"    </form>\n";
+
+	int32_t get_request_send_1_nb_bytes = MX_WIFI_Socket_send(wifi_obj_get(), get_request_sock, (const uint8_t *)web_page_part1, strlen(web_page_part1), 0); // function to send the web page to the client
+
+		if (get_request_send_1_nb_bytes < 0){
+				return GET_REQUEST_SENDING_FAILED;
+		}
+
+	const char* web_page_part2 = "    <script>\n"
 		"        document.getElementById('configForm').addEventListener('submit', function(event) {\n"
 		"            event.preventDefault();\n"
 		"            const form = event.target;\n"
@@ -227,11 +257,12 @@ int8_t app_main( void) {
 		"</body>\n"
 		"</html>";
 
-	int32_t get_request_send_nb_bytes = MX_WIFI_Socket_send(wifi_obj_get(), get_request_sock, (const uint8_t *)web_page, strlen(web_page), 0); // function to send the web page to the client
+	int32_t get_request_send_2_nb_bytes = MX_WIFI_Socket_send(wifi_obj_get(), get_request_sock, (const uint8_t *)web_page_part2, strlen(web_page_part2), 0); // function to send the web page to the client
 
-		if (get_request_send_nb_bytes < 0){
+		if (get_request_send_2_nb_bytes < 0){
 				return GET_REQUEST_SENDING_FAILED;
 		}
+
 
 
 	int32_t post_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
