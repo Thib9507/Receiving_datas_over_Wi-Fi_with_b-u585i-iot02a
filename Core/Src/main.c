@@ -148,6 +148,8 @@ int main(void)
 	  extern unsigned char print_on_uart[1000]; // déclaration externe
 	  HAL_UART_Transmit(&huart1,print_on_uart,sizeof(print_on_uart),10000);// Sending in normal mode
 
+	  extern unsigned char apn, language, dca_nrj;
+
 	  if(app_status==0){
 		  HAL_GPIO_TogglePin(GPIOH, GPIO_PIN_7); // if success --> turn on the green LED
 	  }

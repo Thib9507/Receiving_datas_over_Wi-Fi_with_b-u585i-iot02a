@@ -1,46 +1,8 @@
 #include "app.h"
 #include "main.h"
-
-typedef enum
-{
-  CONSOLE_OK  = 0,
-  CONSOLE_ERROR = -1
-} Console_Status;
-
-UART_HandleTypeDef Console_UARTHandle;
-
-Console_Status webserver_console_config(void)
-{
-  /* Set parameter to be configured */
-  Console_UARTHandle.Instance                    = USART1;
-  Console_UARTHandle.Init.BaudRate               = 115200;
-  Console_UARTHandle.Init.WordLength             = UART_WORDLENGTH_8B;
-  Console_UARTHandle.Init.StopBits               = UART_STOPBITS_1;
-  Console_UARTHandle.Init.Parity                 = UART_PARITY_NONE;
-  Console_UARTHandle.Init.Mode                   = UART_MODE_TX_RX;
-  Console_UARTHandle.Init.HwFlowCtl              = UART_HWCONTROL_NONE;
-  Console_UARTHandle.Init.OverSampling           = UART_OVERSAMPLING_16;
-  Console_UARTHandle.Init.OneBitSampling         = UART_ONE_BIT_SAMPLE_DISABLE;
-  Console_UARTHandle.Init.ClockPrescaler         = UART_PRESCALER_DIV1;
-  Console_UARTHandle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-
-  /* Initialize the UART mode */
-  if (HAL_UART_Init(&Console_UARTHandle) != HAL_OK)
-  {
-    return CONSOLE_ERROR;
-  }
-
-  /* Disable the UART FIFO mode */
-  if (HAL_UARTEx_DisableFifoMode(&Console_UARTHandle) != HAL_OK)
-  {
-    return CONSOLE_ERROR;
-  }
-
-  return CONSOLE_OK;
-}
+#include "cJSON.h"
 
 unsigned char print_on_uart[1000]; // create a buffer to stock the response
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////     APP SETTINGS (SHOULD BE UPDATE)    /////////////////////////////////////////////////////////////////////////////
@@ -59,12 +21,6 @@ int8_t app_main( void) {
     /* Initialize bsp resources */
 
 	// Console_Status console_value = webserver_console_config();
-
-	uint8_t Test[] = "Hello World !!!\r\n"; //Data to send
-	HAL_UART_Transmit(&Console_UARTHandle,Test,sizeof(Test),10);// Sending in normal mode
-	HAL_Delay(1000);
-
-	printf("test");
 
     MX_WIFI_STATUS_T a;  // declare a variable to stock the state of the module
 
@@ -263,8 +219,6 @@ int8_t app_main( void) {
 				return GET_REQUEST_SENDING_FAILED;
 		}
 
-
-
 	int32_t post_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
 
 		if (post_request_sock < 0 ){
@@ -283,6 +237,46 @@ int8_t app_main( void) {
 		if (post_request_recv_nb_bytes < 0){
 				return GET_REQUEST_RECEIVING_FAILED;
 		}
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////
+	// The following code is used to parse the JSON receipted from the client using the cJSON library 	//
+	//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		// json_start
+	char* json_start = strstr((char*)get_request_recv_buffer, "\r\n\r\n"); // find in get_request_recv_buffer the \r\n\r\n characters and send a pointer before these characters
+	if (json_start == NULL) {
+		return JSON_PARSE_ERROR;
+	}
+
+	json_start += 4; // Past the four first characters (\r\n\r\n)
+
+	cJSON* json = cJSON_Parse(json_start); // Entering the JSON char in the library object to use the tools
+	if (json == NULL) {
+		return JSON_PARSE_ERROR;
+	}
+
+	// Extract values with the library tools
+	cJSON* json_apn = cJSON_GetObjectItemCaseSensitive(json, "apn");
+	cJSON* json_language = cJSON_GetObjectItemCaseSensitive(json, "language");
+	cJSON* json_dca_nrj = cJSON_GetObjectItemCaseSensitive(json, "dca_nrj");
+
+	// checking if it worked
+	if (cJSON_IsString(json_apn) && (json_apn->valuestring != NULL) &&
+		cJSON_IsString(json_language) && (json_language->valuestring != NULL) &&
+		cJSON_IsString(json_dca_nrj) && (json_dca_nrj->valuestring != NULL)) {
+		char *apn = json_apn->valuestring;
+		char *language = json_language->valuestring;
+		char *dca_nrj = json_dca_nrj->valuestring;
+
+		if (apn==NULL && language==NULL && dca_nrj == NULL){
+			return JSON_PARSE_ERROR;
+		}
+	}
+	else {
+		return JSON_PARSE_ERROR; // fail
+	}
+
+	cJSON_Delete(json); 	// Delete the JSON object and the associate value to free some space
 
 	a = MX_WIFI_Socket_close(wifi_obj_get(), sock_fd); // Closing socket function
 

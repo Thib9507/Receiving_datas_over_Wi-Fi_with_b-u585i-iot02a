@@ -34,7 +34,8 @@ typedef enum { // Structure to indicate the app status
 	SOCKET_ACCEPTING_FAILED =-8,
 	GET_REQUEST_RECEIVING_FAILED = -9,
 	GET_REQUEST_SENDING_FAILED = -10,
-	SOCKET_CLOSING_FAILED=-11
+	JSON_PARSE_ERROR = -11,
+	SOCKET_CLOSING_FAILED = -12
 } App_status;
 
 int8_t app_main( void);
