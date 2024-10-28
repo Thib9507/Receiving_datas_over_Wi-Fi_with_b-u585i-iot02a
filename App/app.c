@@ -4,6 +4,7 @@
 
 unsigned char print_on_uart[1000]; // create a buffer to stock the response
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////     APP SETTINGS (SHOULD BE UPDATE)    /////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,23 +109,28 @@ int8_t app_main( void) {
 
 	HAL_GPIO_WritePin(GPIOH, GPIO_PIN_7, GPIO_PIN_RESET); // turn on the green LED to indicate that you can connect to IP address
 
-	// accept function will block the device until a connection request, in the function, addr is used to stock the IP address of the remote device
-	int32_t get_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
+	unsigned char get_request_recv_buffer[300]; // create a buffer to stock the response
+	int32_t get_request_sock;
 
-		if (get_request_sock < 0 ){
-				return SOCKET_ACCEPTING_FAILED;
-		}
+	do {
+		// accept function will block the device until a connection request, in the function, addr is used to stock the IP address of the remote device
+		get_request_sock = MX_WIFI_Socket_accept(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)remote_host, &addr_len);
 
-	HAL_GPIO_WritePin(GPIOH, GPIO_PIN_7, GPIO_PIN_SET); // turn on the green LED to indicate that you can connect to IP address
+			if (get_request_sock < 0 ){
+					return SOCKET_ACCEPTING_FAILED;
+			}
 
-	static unsigned char get_request_recv_buffer[300]; // create a buffer to stock the response
-	memset((void*)get_request_recv_buffer, 0, sizeof(get_request_recv_buffer)); // Clear the buffer
+		memset((void*)get_request_recv_buffer, 0, sizeof(get_request_recv_buffer)); // Clear the buffer
 
-	int32_t get_request_recv_nb_bytes = MX_WIFI_Socket_recv(wifi_obj_get(), get_request_sock, (uint8_t *)get_request_recv_buffer, 300, 0); // function to receive the client's request
+		int32_t get_request_recv_nb_bytes = MX_WIFI_Socket_recv(wifi_obj_get(), get_request_sock, (uint8_t *)get_request_recv_buffer, 300, 0); // function to receive the client's request
 
-		if (get_request_recv_nb_bytes < 0){
-				return GET_REQUEST_RECEIVING_FAILED;
-		}
+			if (get_request_recv_nb_bytes < 0){
+					return GET_REQUEST_RECEIVING_FAILED;
+			}
+
+	}while(strncmp((char *)get_request_recv_buffer, "GET /", 5) != 0U); // if the request is not a get request, wait an other request
+
+	HAL_GPIO_WritePin(GPIOH, GPIO_PIN_7, GPIO_PIN_SET); // turn off the green LED
 
 		// The following part is the code of the web page sent to the client. This web page is sent by few request because the module can send a limited number of bytes (2482)
 	const char* web_page_part1 = "HTTP/1.1 200 OK\r\n"
@@ -239,11 +245,11 @@ int8_t app_main( void) {
 		}
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////
-	// The following code is used to parse the JSON receipted from the client using the cJSON library 	//
+	//	The following code is used to parse the JSON receipted from the client using the cJSON library 	//
 	//////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		// json_start
-	char* json_start = strstr((char*)get_request_recv_buffer, "\r\n\r\n"); // find in get_request_recv_buffer the \r\n\r\n characters and send a pointer before these characters
+	char* json_start = strstr((char*)post_request_recv_buffer, "\r\n\r\n"); // find in get_request_recv_buffer the \r\n\r\n characters and send a pointer before these characters
 	if (json_start == NULL) {
 		return JSON_PARSE_ERROR;
 	}
