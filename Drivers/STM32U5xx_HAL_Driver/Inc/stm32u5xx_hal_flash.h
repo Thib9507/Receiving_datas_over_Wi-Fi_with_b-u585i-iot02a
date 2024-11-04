@@ -57,6 +57,14 @@ typedef struct
                              (max number of pages in the bank - value of initial page)*/
 } FLASH_EraseInitTypeDef;
 
+
+/*
+ * type : FLASH_TYPEERASE_PAGES
+ * Banks : only for mass (don't concern)
+ * page :
+ * NbPages :
+*/
+
 /**
   * @brief  FLASH Option Bytes Program structure definition
   */

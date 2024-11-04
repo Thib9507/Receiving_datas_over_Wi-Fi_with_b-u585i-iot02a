@@ -46,14 +46,15 @@ MEMORY
 {
   RAM	(xrw)	: ORIGIN = 0x20000000,	LENGTH = 768K
   SRAM4	(xrw)	: ORIGIN = 0x28000000,	LENGTH = 16K
-  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 2048K
+  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 2048K-8K
+  CONFIG	(rx)	: ORIGIN = 0x08000000+2048K-8K,	LENGTH = 8K
 }
 
 /* Sections */
 SECTIONS
 {
   /* The startup code into "FLASH" Rom type memory */
-  .isr_vector :
+	.isr_vector :
   {
     KEEP(*(.isr_vector)) /* Startup code */
   } >FLASH
@@ -113,7 +114,7 @@ SECTIONS
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >FLASH
-
+  
   /* Used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 
@@ -153,6 +154,16 @@ SECTIONS
     . = . + _Min_Stack_Size;
     . = ALIGN(8);
   } >RAM
+  
+  .config_data (NOLOAD) :
+  {
+    . = ALIGN(4);
+    PROVIDE(__config_data_start = .);
+    KEEP(*(.config_data.*))
+    PROVIDE(__config_data_end = .);
+    . = ALIGN(4);
+  } > CONFIG 
+
 
   /* Remove information from the compiler libraries */
   /DISCARD/ :

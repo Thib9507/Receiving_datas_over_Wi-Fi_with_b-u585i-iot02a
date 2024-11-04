@@ -4,7 +4,6 @@
 
 unsigned char print_on_uart[1000]; // create a buffer to stock the response
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////     APP SETTINGS (SHOULD BE UPDATE)    /////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,9 +16,111 @@ int32_t socket_timeout = 0xFFFFFFFF; // Setting time to connect to the server			
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+typedef struct {
+	char apn[32];    // 8 uint32_t
+	char lang[32];   // 8 uint32_t
+	char dca_nrj[32];// 8 uint32_t
+} __attribute__((packed)) T_config;
+
+T_config g_config_flash __attribute__((section(".config_data"), aligned(4))) = {
+	.apn     = {'A','B','C'},
+	.lang    = {'X','Y','Z'},
+	.dca_nrj = {'1','2','3'},
+};
+
+extern uint32_t __nv_data_start__; // Déclaration de l'adresse de début de nv_data
+
+
+int8_t write_string_to_flash( T_config * config) {
+	FLASH_EraseInitTypeDef eraseInit;
+	HAL_StatusTypeDef ret;
+	uint32_t address = (uint32_t) &g_config_flash;
+	uint32_t PageError = 0;
+	uint32_t i;
+
+	// Débloquer la flash
+	HAL_FLASH_Unlock();
+
+	// Structure pour l'effacement de la flash
+	eraseInit.TypeErase = FLASH_TYPEERASE_PAGES;
+	eraseInit.Banks = FLASH_BANK_2;
+	eraseInit.Page = (address - 0x08100000) / FLASH_PAGE_SIZE; // Convertir l'adresse en numéro de page (0x8100000 start of bank2)
+	eraseInit.NbPages = 1; // 1 devrait être suffisant pour une page de 8ko (section de 8k dans le linker)
+
+	// Effacer la mémoire flash
+	ret = HAL_FLASHEx_Erase(&eraseInit, &PageError);
+	if( ret != HAL_OK) {
+		HAL_FLASH_Lock();
+		return VOLATILE_WRITING_FAILED;
+	}
+
+	uint32_t * data = (uint32_t *) config;
+	//for( i = 0; i < 96; i += 16) {
+	for( i = 0; i < sizeof(T_config); i += 16) {
+
+		/* Check overflow */
+		if( i/4 >= sizeof( g_config_flash)) {
+			HAL_FLASH_Lock();
+			return VOLATILE_WRITING_FAILED;
+		}
+
+		/*
+		 * 1er tour
+		 *   i = 0 => i/4 = 0
+		 *   ecrire 4 words => data 0, 1, 2, 3
+		 * 2eme tour
+		 *   i = 16 => i/4 = 4
+		 *   ecrire 4 words => data 4, 5, 6, 7
+		 * 3ème tour
+		 *   i = 32 => i/4 = 8
+		 *   écrire 4 words => data 8, 9, 10, 11
+		 */
+		ret = HAL_FLASH_Program( FLASH_TYPEPROGRAM_QUADWORD, address, (uint32_t) (data+(i/4)));
+		if( ret != HAL_OK) {
+			HAL_FLASH_Lock();
+			return VOLATILE_WRITING_FAILED;
+		}
+
+		address += 16;
+	}
+
+	// Re-verrouiller la flash
+	HAL_FLASH_Lock();
+
+	return 0;
+}
+
+int8_t read_string_from_flash(char *dest, uint32_t address, size_t max_length) {
+    // Pointeur vers la zone de la flash où la chaîne est stockée
+    const char *flash_data = (const char *)address;
+
+    // Copier les données de la flash vers la destination
+    for (size_t i = 0; i < max_length; i++) {
+        dest[i] = flash_data[i];
+
+        // Arrêter si on rencontre le caractère nul (fin de chaîne)
+        if (flash_data[i] == '\0') {
+            return 0; // Lecture réussie
+        }
+    }
+
+    // Si on atteint max_length sans rencontrer de '\0', on considère qu'il y a une erreur.
+    return -1; // Erreur si la chaîne est trop longue pour max_length
+}
+
+
 int8_t app_main( void) {
 
     /* Initialize bsp resources */
+	T_config config_write;
+	T_config config_read;
+
+	memcpy( &config_read, &g_config_flash, sizeof( T_config));
+
+	printf("apn: %s\n", config_read.apn);
+	printf("lang: %s\n", config_read.lang);
+	printf("dca_nrj: %s\n", config_read.dca_nrj);
 
 	// Console_Status console_value = webserver_console_config();
 
@@ -270,17 +371,38 @@ int8_t app_main( void) {
 	if (cJSON_IsString(json_apn) && (json_apn->valuestring != NULL) &&
 		cJSON_IsString(json_language) && (json_language->valuestring != NULL) &&
 		cJSON_IsString(json_dca_nrj) && (json_dca_nrj->valuestring != NULL)) {
-		char *apn = json_apn->valuestring;
-		char *language = json_language->valuestring;
-		char *dca_nrj = json_dca_nrj->valuestring;
 
-		if (apn==NULL && language==NULL && dca_nrj == NULL){
-			return JSON_PARSE_ERROR;
+		memcpy(config_write.apn,json_apn->valuestring,sizeof(config_write.apn));
+		memcpy(config_write.lang,json_language->valuestring,sizeof(config_write.lang));
+		memcpy(config_write.dca_nrj,json_dca_nrj->valuestring,sizeof(config_write.dca_nrj));
+
+		int8_t writing_status = write_string_to_flash( &config_write);
+		if( writing_status < 0) {
+			return -100;
 		}
+
+		memcpy( &config_read, &g_config_flash, sizeof( T_config));
+
+		printf("apn: %s\n", config_read.apn);
+		printf("lang: %s\n", config_read.lang);
+		printf("dca_nrj: %s\n", config_read.dca_nrj);
+	}
+#if 0
+		char buffer[100]; // Taille suffisante pour contenir la chaîne
+		if (read_string_from_flash(buffer, &g_config_flash, sizeof(buffer)) == 0) {
+		    printf("Contenu de la flash : %s\n", buffer);
+		} else {
+		    printf("Erreur lors de la lecture de la flash.\n");
+		}
+
+		/*if (config_flash->apn==NULL || config_flash->lang==NULL || config_flash->dca_nrj == NULL || writing_status!=0 ){
+			return VOLATILE_WRITING_FAILED;
+		}*/
 	}
 	else {
 		return JSON_PARSE_ERROR; // fail
 	}
+#endif
 
 	cJSON_Delete(json); 	// Delete the JSON object and the associate value to free some space
 
