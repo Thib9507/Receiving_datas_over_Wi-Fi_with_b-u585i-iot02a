@@ -16,21 +16,13 @@ int32_t socket_timeout = 0xFFFFFFFF; // Setting time to connect to the server			
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 typedef struct {
-	char apn[32];    // 8 uint32_t
-	char lang[32];   // 8 uint32_t
-	char dca_nrj[32];// 8 uint32_t
+	char apn[32];
+	char language[32];
+	char dca_nrj[32];
 } __attribute__((packed)) T_config;
 
-T_config g_config_flash __attribute__((section(".config_data"), aligned(4))) = {
-	.apn     = {'A','B','C'},
-	.lang    = {'X','Y','Z'},
-	.dca_nrj = {'1','2','3'},
-};
-
-extern uint32_t __nv_data_start__; // Déclaration de l'adresse de début de nv_data
-
+T_config g_config_flash __attribute__((section(".config_data"), aligned(4))); // Config declaration in flash memory
 
 int8_t write_string_to_flash( T_config * config) {
 	FLASH_EraseInitTypeDef eraseInit;
@@ -39,24 +31,67 @@ int8_t write_string_to_flash( T_config * config) {
 	uint32_t PageError = 0;
 	uint32_t i;
 
-	// Débloquer la flash
-	HAL_FLASH_Unlock();
+	HAL_FLASH_Unlock(); 	// Unlock flash to manipulate it
 
-	// Structure pour l'effacement de la flash
-	eraseInit.TypeErase = FLASH_TYPEERASE_PAGES;
-	eraseInit.Banks = FLASH_BANK_2;
-	eraseInit.Page = (address - 0x08100000) / FLASH_PAGE_SIZE; // Convertir l'adresse en numéro de page (0x8100000 start of bank2)
-	eraseInit.NbPages = 1; // 1 devrait être suffisant pour une page de 8ko (section de 8k dans le linker)
+	// Little schema to understand the flash memory composition (we will manipulate it below)
 
-	// Effacer la mémoire flash
-	ret = HAL_FLASHEx_Erase(&eraseInit, &PageError);
+
+    //////////////////////////////////////////////////////////////////////////
+    ////                    //                    //                        //
+    ////                    //                    //        Page 0    (8KB) //
+    ////                    //                    //                        //
+    ////                    //                    ////////////////////////////
+    ////                    //                    //                        //
+    ////                    //                    //        Page 1    (8KB) //
+    ////                    //                    //                        //
+    ////                    //        Bank 1      ////////////////////////////
+    ////                    //                    //        .               //
+    ////                    //      127 * 8KB     //        .               //
+    ////                    //                    //        .               //
+    ////                    //                    //        .               //
+    ////                    //                    ////////////////////////////
+    ////                    //                    //                        //
+    ////                    //                    //       Page 127 (8KB)   //
+    ////        Main        //                    //                        //
+    ////        flash       //////////////////////////////////////////////////
+    ////        memory      //                    //                        //
+    ////                    //                    //       Page 0    (8KB)  //
+    ////                    //                    //                        //
+    ////                    //                    ////////////////////////////
+    ////                    //                    //                        //
+    ////                    //                    //       Page 1    (8KB)  //
+    ////                    //                    //                        //
+    ////                    //        Bank 2      ////////////////////////////
+    ////                    //                    //        .               //
+    ////                    //      127 * 8KB     //        .               //
+    ////                    //                    //        .               //
+    ////                    //                    //        .               //
+    ////                    //                    ////////////////////////////
+    ////                    //                    //                        //
+    ////                    //                    //      Page 127 (8KB)    //
+    ////                    //                    //                        //
+    //////////////////////////////////////////////////////////////////////////
+
+
+
+	// Structure to feed HAL_FLASHEx_Erase (choose the erase mode)
+
+	eraseInit.TypeErase = FLASH_TYPEERASE_PAGES; // Choosing page erasing mode
+	eraseInit.Banks = FLASH_BANK_2; // Selecting the 2nd bank, because we declared the area at the end of the flash memory in the linker file
+	eraseInit.NbPages = 1; // Our application required only 1 page to store the config
+	eraseInit.Page = (address - 0x08100000) / FLASH_PAGE_SIZE; // Giving the number of the page to erase
+
+
+	ret = HAL_FLASHEx_Erase(&eraseInit, &PageError); // function to erase flash memory (to write stuff in an area of the flash, the concerned area have to be empty)
 	if( ret != HAL_OK) {
 		HAL_FLASH_Lock();
 		return VOLATILE_WRITING_FAILED;
 	}
 
-	uint32_t * data = (uint32_t *) config;
-	//for( i = 0; i < 96; i += 16) {
+	uint32_t data[sizeof(T_config) / sizeof(uint32_t)];
+	memcpy(data, config, sizeof(T_config));
+
+	// For loop to write each quadwords in the flash (a quadword is a group of 4 words : with u585 MPU, you can write in the flash only with quadword or burst (more complicated)
 	for( i = 0; i < sizeof(T_config); i += 16) {
 
 		/* Check overflow */
@@ -66,83 +101,66 @@ int8_t write_string_to_flash( T_config * config) {
 		}
 
 		/*
-		 * 1er tour
+		 * 1st lap
 		 *   i = 0 => i/4 = 0
-		 *   ecrire 4 words => data 0, 1, 2, 3
-		 * 2eme tour
+		 *   writing 4 words => data 0, 1, 2, 3
+		 * 2nd lap
 		 *   i = 16 => i/4 = 4
-		 *   ecrire 4 words => data 4, 5, 6, 7
-		 * 3ème tour
+		 *   writing 4 words => data 4, 5, 6, 7
+		 * 3rd lap
 		 *   i = 32 => i/4 = 8
-		 *   écrire 4 words => data 8, 9, 10, 11
+		 *   writing 4 words => data 8, 9, 10, 11
+		 *   .
+		 *   .
+		 *   .
 		 */
 		ret = HAL_FLASH_Program( FLASH_TYPEPROGRAM_QUADWORD, address, (uint32_t) (data+(i/4)));
 		if( ret != HAL_OK) {
 			HAL_FLASH_Lock();
 			return VOLATILE_WRITING_FAILED;
 		}
-
 		address += 16;
 	}
 
-	// Re-verrouiller la flash
+	// Re-lock the flash
 	HAL_FLASH_Lock();
-
 	return 0;
 }
 
-int8_t read_string_from_flash(char *dest, uint32_t address, size_t max_length) {
-    // Pointeur vers la zone de la flash où la chaîne est stockée
-    const char *flash_data = (const char *)address;
+void read_string_from_flash(void) {
 
-    // Copier les données de la flash vers la destination
-    for (size_t i = 0; i < max_length; i++) {
-        dest[i] = flash_data[i];
+	T_config config_read;
 
-        // Arrêter si on rencontre le caractère nul (fin de chaîne)
-        if (flash_data[i] == '\0') {
-            return 0; // Lecture réussie
-        }
-    }
+	memcpy( &config_read, &g_config_flash, sizeof( T_config)); // read the initial config in flash
 
-    // Si on atteint max_length sans rencontrer de '\0', on considère qu'il y a une erreur.
-    return -1; // Erreur si la chaîne est trop longue pour max_length
+	printf("apn: %s\n", config_read.apn);
+	printf("language: %s\n", config_read.language);
+	printf("dca_nrj: %s\n", config_read.dca_nrj);
 }
-
 
 int8_t app_main( void) {
 
-    /* Initialize bsp resources */
-	T_config config_write;
-	T_config config_read;
+	read_string_from_flash();
 
-	memcpy( &config_read, &g_config_flash, sizeof( T_config));
+    MX_WIFI_STATUS_T app_status;  // declare a variable to stock the state of the module
 
-	printf("apn: %s\n", config_read.apn);
-	printf("lang: %s\n", config_read.lang);
-	printf("dca_nrj: %s\n", config_read.dca_nrj);
-
-	// Console_Status console_value = webserver_console_config();
-
-    MX_WIFI_STATUS_T a;  // declare a variable to stock the state of the module
-
-    a = MX_WIFI_Scan(wifi_obj_get(), 0, NULL,0); // scan is mandatory before connecting request to connect correctly
+    app_status = MX_WIFI_Scan(wifi_obj_get(), 0, NULL,0); // scan is mandatory before connecting request to connect correctly
 
     (wifi_obj_get())->NetSettings.DHCP_IsEnabled=1; // switch on the DHCP to get an IP address
 
-    a = MX_WIFI_Connect(wifi_obj_get(), SSID, Password, MX_WIFI_SEC_WPA_AES);
+    app_status = MX_WIFI_Connect(wifi_obj_get(), SSID, Password, MX_WIFI_SEC_WPA_AES);
 
     HAL_Delay(5000); // waiting for 5s to get connected correctly
 
-		if (a != MX_WIFI_STATUS_OK){
+		if (app_status != MX_WIFI_STATUS_OK){
 			return WIFI_CONNECTION_FAILED ;
 		}
 
     uint8_t module_IP[4]; // declare a vector to stock the IP address of the module
 
-    a = MX_WIFI_GetIPAddress(wifi_obj_get(),&module_IP[0],MC_STATION);
+    app_status = MX_WIFI_GetIPAddress(wifi_obj_get(),&module_IP[0],MC_STATION);
 
-		if (a != MX_WIFI_STATUS_OK){
+		if (app_status != MX_WIFI_STATUS_OK){
 			return IP_REQUEST_FAILED;
 		}
 
@@ -152,9 +170,9 @@ int8_t app_main( void) {
 			return SOCKET_CREATION_FAILED ;
 		}
 
-	a = MX_WIFI_Socket_setsockopt(wifi_obj_get(), sock_fd, (int32_t) 4095, (int32_t)4102, &socket_timeout, (int32_t) 4); // set the infinite timeout to let the time to connect to the IP address
+		app_status = MX_WIFI_Socket_setsockopt(wifi_obj_get(), sock_fd, (int32_t) 4095, (int32_t)4102, &socket_timeout, (int32_t) 4); // set the infinite timeout to let the time to connect to the IP address
 
-		if (a != MX_WIFI_STATUS_OK){
+		if (app_status != MX_WIFI_STATUS_OK){
 				return SOCKET_SETING_OPTION_FAILED;
 		}
 
@@ -176,15 +194,15 @@ int8_t app_main( void) {
 		server_addr->sa_data[12] = 0;
 		server_addr->sa_data[13] = 0;
 
-	a = MX_WIFI_Socket_bind(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)server_addr, (int32_t)sizeof(struct mx_sockaddr_in)); // Linking the IP address obtained with the socket
+		app_status = MX_WIFI_Socket_bind(wifi_obj_get(), sock_fd, (struct mx_sockaddr *)server_addr, (int32_t)sizeof(struct mx_sockaddr_in)); // Linking the IP address obtained with the socket
 
-		if (a != MX_WIFI_STATUS_OK){
+		if (app_status != MX_WIFI_STATUS_OK){
 			return SOCKET_BINDING_FAILED;
 		}
 
-	a =	MX_WIFI_Socket_listen(wifi_obj_get(),sock_fd, 1); // backlog here 5 is the number of connection accepted
+		app_status = MX_WIFI_Socket_listen(wifi_obj_get(),sock_fd, 1); // backlog here 5 is the number of connection accepted
 
-		if (a != MX_WIFI_STATUS_OK){
+		if (app_status != MX_WIFI_STATUS_OK){
 				return SOCKET_LISTENING_FAILED;
 		}
 
@@ -260,9 +278,9 @@ int8_t app_main( void) {
 		"    <form id=\"configForm\" method=\"POST\">\n"
 		"		<label for=\"apn\">APN SIM :</label>\n"
 		"        <select id=\"apn\" name=\"apn\" required>\n"
-		"            <option value=\"free\">Free</option>\n"
-		"            <option value=\"orange\">Orange</option>\n"
-		"            <option value=\"bouygues\">Bouygues</option>\n"
+		"            <option value=\"Free\">Free</option>\n"
+		"            <option value=\"Orange\">Orange</option>\n"
+		"            <option value=\"Bouygues\">Bouygues</option>\n"
 		"        </select>\n"
 		"		<br>\n"
 		"        <label for=\"language\">Defibrillator language :</label>\n"
@@ -367,48 +385,30 @@ int8_t app_main( void) {
 	cJSON* json_language = cJSON_GetObjectItemCaseSensitive(json, "language");
 	cJSON* json_dca_nrj = cJSON_GetObjectItemCaseSensitive(json, "dca_nrj");
 
-	// checking if it worked
+	// Checking if the parse worked
 	if (cJSON_IsString(json_apn) && (json_apn->valuestring != NULL) &&
 		cJSON_IsString(json_language) && (json_language->valuestring != NULL) &&
 		cJSON_IsString(json_dca_nrj) && (json_dca_nrj->valuestring != NULL)) {
 
+		T_config config_write;
+
 		memcpy(config_write.apn,json_apn->valuestring,sizeof(config_write.apn));
-		memcpy(config_write.lang,json_language->valuestring,sizeof(config_write.lang));
+		memcpy(config_write.language,json_language->valuestring,sizeof(config_write.language));				// concatenate all the strings in an unique structure to write it in the flash
 		memcpy(config_write.dca_nrj,json_dca_nrj->valuestring,sizeof(config_write.dca_nrj));
 
 		int8_t writing_status = write_string_to_flash( &config_write);
 		if( writing_status < 0) {
-			return -100;
+			return writing_status;
 		}
 
-		memcpy( &config_read, &g_config_flash, sizeof( T_config));
-
-		printf("apn: %s\n", config_read.apn);
-		printf("lang: %s\n", config_read.lang);
-		printf("dca_nrj: %s\n", config_read.dca_nrj);
+		read_string_from_flash();
 	}
-#if 0
-		char buffer[100]; // Taille suffisante pour contenir la chaîne
-		if (read_string_from_flash(buffer, &g_config_flash, sizeof(buffer)) == 0) {
-		    printf("Contenu de la flash : %s\n", buffer);
-		} else {
-		    printf("Erreur lors de la lecture de la flash.\n");
-		}
-
-		/*if (config_flash->apn==NULL || config_flash->lang==NULL || config_flash->dca_nrj == NULL || writing_status!=0 ){
-			return VOLATILE_WRITING_FAILED;
-		}*/
-	}
-	else {
-		return JSON_PARSE_ERROR; // fail
-	}
-#endif
 
 	cJSON_Delete(json); 	// Delete the JSON object and the associate value to free some space
 
-	a = MX_WIFI_Socket_close(wifi_obj_get(), sock_fd); // Closing socket function
+	app_status = MX_WIFI_Socket_close(wifi_obj_get(), sock_fd); // Closing socket function
 
-	if (a != MX_WIFI_STATUS_OK){
+	if (app_status != MX_WIFI_STATUS_OK){
 		return SOCKET_CLOSING_FAILED;
 	}
 
