@@ -7,6 +7,9 @@
 #include "mx_wifi_io.h"
 #include "mx_address.h"
 #include "init/app_init.h"
+#include "flash_tools/flash_tools.h"
+#include "main.h"
+#include "cJSON.h"
 
 #include <stdio.h>
 #include <string.h>

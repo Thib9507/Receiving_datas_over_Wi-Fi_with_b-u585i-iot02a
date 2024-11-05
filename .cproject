@@ -57,6 +57,7 @@
 									<listOptionValue builtIn="false" value="../Drivers/BSP/Components/mx_wifi/io_pattern"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/init}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/cJSON}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/flash_tools}&quot;"/>
 								</option>
 								<inputType id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c.1364077264" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.c.compiler.input.c"/>
 							</tool>
