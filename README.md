@@ -2,7 +2,7 @@
 
 ## Project Objective:
 
-This project aims to modify a configuration stored in the non volatile memory of the evaluation kit. To do it the kit connects automaticly to a Wi-Fi network using credentials entered in the code. When the kit is connected to the network, a green LED switchs on then the user has to connect to the ip-address of the kit. The kit sends a web page to edit the config using a form to fill in on the webpage.
+This project aims to modify a configuration stored in the non volatile memory of the evaluation kit (b-u585i-iot02a from ST-microelectronics). To do it the kit connects automatically to a Wi-Fi network using credentials entered in the code. When the kit is connected to the network, a green LED switchs on then the user has to connect to the ip-address of the kit. The kit sends a web page to edit the config using a form to fill in on the webpage.
 
 If something went wrong, a red LED would switched on and value corresponding to the error is returned from the application fonction. 
 
