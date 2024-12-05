@@ -2,7 +2,7 @@
 
 ## Project Objective:
 
-This project aims to modify a configuration stored in the non volatile memory of the evaluation kit (b-u585i-iot02a from STMicroelectronics). To do it the kit connect automaticly to a Wi-Fi network. The client who wants to edit the config have to connect to the ipadress of the kit, then the kit sends a web page to edit the config and the client can edit it on the webpage and return it to the kit.
+This project aims to modify a configuration stored in the non volatile memory of the evaluation kit (b-u585i-iot02a from STMicroelectronics). To do it the kit connects automaticaly to a Wi-Fi network. The client who wants to edit the config has to connect to the ip-address of the kit, then the kit sends a web page to edit the config. The user can edit it on the webpage and return it to the kit by filled in the form of the webpage.
 
 
 ## Project importation:
